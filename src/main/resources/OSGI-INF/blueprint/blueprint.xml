@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<blueprint default-activation="eager"
+           xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:cxf="http://camel.apache.org/schema/blueprint/cxf"
+           xmlns:jaxrs="http://cxf.apache.org/blueprint/jaxrs"
+           xmlns:jpa="http://aries.apache.org/xmlns/jpa/v1.1.0"
+           xmlns:tx="http://aries.apache.org/xmlns/transactions/v1.1.0"
+           xmlns:cm="http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.0.0"
+           xmlns:enc="http://karaf.apache.org/xmlns/jasypt/v1.0.0"
+           xmlns:camel-cxf="http://camel.apache.org/schema/blueprint/cxf"
+           xmlns:http-conf="http://cxf.apache.org/transports/http/configuration"
+           xmlns:ext="http://aries.apache.org/blueprint/xmlns/blueprint-ext/v1.0.0"
+           xsi:schemaLocation="http://camel.apache.org/schema/blueprint/cxf
+           http://camel.apache.org/schema/blueprint/cxf/camel-cxf.xsd
+           http://cxf.apache.org/blueprint/jaxrs http://cxf.apache.org/schemas/blueprint/jaxrs.xsd
+           http://aries.apache.org/xmlns/jpa/v1.1.0
+           http://aries.apache.org/schemas/jpa/jpa_110.xsd
+           http://aries.apache.org/xmlns/transactions/v1.1.0
+           http://aries.apache.org/schemas/transaction/transactionv11.xsd
+           http://cxf.apache.org/transports/http/configuration
+           http://cxf.apache.org/schemas/configuration/http-conf.xsd
+           http://aries.apache.org/blueprint/xmlns/blueprint-cm/v1.0.0
+           http://aries.apache.org/schemas/blueprint-cm/blueprint-cm-1.0.0.xsd">
+
+    <!--
+         This demo is intended to illustrate the usage of the Camel PDF component
+    -->
+
+    <!--
+        Instructions for use:
+
+        0. Build and deploy this bundle to your local Fuse container
+
+        1. Run a curl command to POST data to the addgeo endpoint
+            curl -X POST -H "Content-Type: application/json" -D "{"id": 12345}" http://localhost:8080/async/addgeo
+
+        2. You will get back a UUID as a response from step 1, use that UUID to call the getresults endpoint:
+            curl http://localhost:8080/async/getresults/e176cec2-30e1-45d8-8cc1-9fb06bbd4491
+
+        3. You will get back one of two possible responses:
+            a. "nothing available yet, try again later"
+            b. "Added geo to requested media plan"
+
+        4. Repeat step 3 as necessary, it will take 45 seconds before data is available
+    -->
+
+    <camelContext xmlns="http://camel.apache.org/schema/blueprint">
+        <restConfiguration bindingMode="auto" component="restlet" port="8080"/>
+
+        <!--
+             One common pattern for using the REST DSL is to expose the endpoints like this
+             but then send the data over to a route to complete the request,
+             I am using the direct component for this particular use case
+        -->
+        <rest path="/pdf-poc">
+            <post uri="/extract" consumes="application/octet-stream" produces="application/json">
+                <to uri="direct:parsePDF"/>
+            </post>
+        </rest>
+
+        <!-- The other pattern is to embed the routes right in the REST DSL like this -->
+        <rest path="/demo">
+            <get uri="/hello/{id}" produces="application/json">
+                <route>
+                    <to uri="bean:serviceBean?method=generateGUID"/>
+                    <to uri="bean:response?method=buildResponse"/>
+                </route>
+            </get>
+        </rest>
+
+
+
+        <!--
+             This route uses the PDF component to parse the incoming data
+        -->
+        <route>
+            <from uri="direct:parsePDF"/>
+            <setExchangePattern pattern="InOut"/>
+            <to uri="log:pdf-poc?showHeaders=true"/>
+            <log message="message recieved in parsePDF route"/>
+            <to uri="pdf:extractText"/>
+        </route>
+
+
+    </camelContext>
+
+</blueprint>
